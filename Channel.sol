@@ -5,11 +5,12 @@ contract Channel{
 
     address payable public owner1;
     address payable public owner2;    // The Person who deployed the contract.
-    uint256 owner1Money;
-    uint256 owner2Money;
-    uint appealPeriod;
-    int lastSerial;
-    uint startAppealBlock;
+    uint256 public owner1Money;
+    uint256 public owner2Money;
+    uint public appealPeriod;
+    int public lastSerial;
+    uint256 public lastBalance;
+    uint public startAppealBlock;
 
     event test(string msg);
 
@@ -25,15 +26,20 @@ contract Channel{
     constructor(address payable _other_owner, uint _appeal_period_len) payable public{
 	    owner1 = _other_owner;
 	    owner2 = msg.sender;
-	    owner1Money = address(this).balance / 2;    // Default shares
-	    owner2Money = address(this).balance / 2;
-	    lastSerial = 0;
+	    owner1Money = 0;
+	    owner2Money = 0;
+	    lastSerial = -1;
+	    lastBalance;
 	    appealPeriod = _appeal_period_len;
 	}
 
 
     // closes the channel according to a default_split, gives the money to party 1. starts the appeal process.
     function default_split() onlyOwners external{
+        owner1Money = address(this).balance / 2;    // Default shares
+	    owner2Money = address(this).balance / 2;
+	    lastBalance = address(this).balance / 2;
+	    lastSerial = 0;
         startAppealBlock = block.number;
     }
 
@@ -62,6 +68,7 @@ contract Channel{
         // If the signiture is valid - starts the appeal period:
         startAppealBlock = block.number;
         lastSerial = serial_num;
+        lastBalance = balance;
     }
 
 
@@ -78,12 +85,15 @@ contract Channel{
             owner2Money = balance;
             owner2Money = address(this).balance - owner2Money;
         }
+
+        lastSerial = serial_num;
+        lastBalance = balance;
     }
 
 
     //withdraws the money of msg.sender to the address he requested. Only used after appeals are done.
     function withdraw_funds(address payable dest_address) onlyOwners external{
-
+        require(lastSerial >= 0, "Channel is not closed yet.");
         require(block.number >= (startAppealBlock + appealPeriod), "Appeal period is not over yet!");
         uint256 amountToWithdraw;
         if(msg.sender == owner1){
