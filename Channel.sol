@@ -27,12 +27,13 @@ contract Channel{
 	    owner2 = msg.sender;
 	    owner1Money = address(this).balance / 2;    // Default shares
 	    owner2Money = address(this).balance / 2;
+	    lastSerial = 0;
 	    appealPeriod = _appeal_period_len;
 	}
 
 
     // closes the channel according to a default_split, gives the money to party 1. starts the appeal process.
-    function default_split() onlyOwners external{ // why should it give money before the appeal period is done?
+    function default_split() onlyOwners external{
         startAppealBlock = block.number;
     }
 
@@ -67,13 +68,13 @@ contract Channel{
     // appeals a one_sided_close. should show a newer signature. only useful within the appeal period
     function appeal_closure(uint256 balance, int serial_num , uint8 v, bytes32 r, bytes32 s) onlyOwners external{
 
-        require(block.number - startAppealBlock < appealPeriod, "The appeal period is over.") // TODO: where do I zero startAppealBlock?
+        require(block.number - startAppealBlock < appealPeriod, "The appeal period is over.");
         if(msg.sender == owner1){
-            require(verifySig(balance, serial_num, v, r, s, owner2) && serial_num > lastSerial, "Supplied signiture or serial number are not valid.");
+            require(verifySig(balance, serial_num, v, r, s, owner2) && serial_num > lastSerial, "Appeal is illegal.");
             owner1Money = balance;
             owner2Money = address(this).balance - owner1Money;
         } else{
-            require(verifySig(balance, serial_num, v, r, s, owner1) && serial_num > lastSerial, "Supplied signiture or serial number are not valid");
+            require(verifySig(balance, serial_num, v, r, s, owner1) && serial_num > lastSerial, "Appeal is illegal.");
             owner2Money = balance;
             owner2Money = address(this).balance - owner2Money;
         }
