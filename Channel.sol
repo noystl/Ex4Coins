@@ -8,11 +8,11 @@ contract Channel{
     uint256 public owner1Money;
     uint256 public owner2Money;
     uint public appealPeriod;
-    int public lastSerial;
+    int8 public lastSerial;
     uint256 public lastBalance;
     uint public startAppealBlock;
 
-    event test(string msg);
+    event test(uint256 msg);
 
 	//Notice how this modifier is used below to restrict access. Create more if you need them!
     modifier onlyOwners{
@@ -29,65 +29,77 @@ contract Channel{
 	    owner1Money = 0;
 	    owner2Money = 0;
 	    lastSerial = -1;
-	    lastBalance;
 	    appealPeriod = _appeal_period_len;
 	}
 
 
     // closes the channel according to a default_split, gives the money to party 1. starts the appeal process.
     function default_split() onlyOwners external{
-        owner1Money = address(this).balance / 2;    // Default shares
-	    owner2Money = address(this).balance / 2;
-	    lastBalance = address(this).balance / 2;
+        owner1Money = 0;    // Default shares
+	    owner2Money = address(this).balance;
 	    lastSerial = 0;
         startAppealBlock = block.number;
     }
 
 
-    function verifySig(uint256 balance, int serial_num, uint8 v, bytes32 r, bytes32 s, address signerPubKey) pure public returns (bool){
-        bytes32 hashMessage = keccak256(abi.encodePacked(balance, serial_num));
+    function verifySig(address contractAddr, address reciver, uint256 balance, int8 serial_num, uint8 v, bytes32 r, bytes32 s, address signerPubKey) pure public returns (bool){
+        bytes32 hashMessage = keccak256(abi.encodePacked(contractAddr, reciver, balance, serial_num));
         bytes32 messageDigest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hashMessage));
         return ecrecover(messageDigest, v, r, s) ==signerPubKey;
     }
 
 
     //closes the channel based on a message by one party. starts the appeal period
-    function one_sided_close(uint256 balance, int serial_num , uint8 v, bytes32 r, bytes32 s) onlyOwners external{
+    function one_sided_close(address contractAddr, address reciver, uint256 balance, int8 serial_num , uint8 v, bytes32 r, bytes32 s) onlyOwners external{
 
-        // Tests the signiture and updates the money partition:
+        // Tests the signiture:
         if(msg.sender == owner1){
-            require(verifySig(balance, serial_num, v, r, s, owner2), "Supplied signiture is not valid.");
-            owner1Money = balance;
-            owner2Money = address(this).balance - owner1Money;
+            require(verifySig(contractAddr, reciver, balance, serial_num, v, r, s, owner2), "Supplied signiture is not valid.");
         } else{
-            require(verifySig(balance, serial_num, v, r, s, owner1), "Supplied signiture is not valid.");
-            owner2Money = balance;
-            owner2Money = address(this).balance - owner2Money;
+            require(verifySig(contractAddr, reciver, balance, serial_num, v, r, s, owner1), "Supplied signiture is not valid.");
         }
 
-        // If the signiture is valid - starts the appeal period:
+        require(contractAddr == address(this) && serial_num > lastSerial && balance >=0, "Fishy message.");
+
+        // Gives money to the reciver:
+        if(reciver == owner1){
+            owner1Money = balance;
+            owner2Money = address(this).balance - balance;
+        }else{
+            owner2Money = balance;
+            owner1Money = address(this).balance - balance;
+        }
+
+        // Starts the appeal period:
         startAppealBlock = block.number;
         lastSerial = serial_num;
-        lastBalance = balance;
     }
 
 
     // appeals a one_sided_close. should show a newer signature. only useful within the appeal period
-    function appeal_closure(uint256 balance, int serial_num , uint8 v, bytes32 r, bytes32 s) onlyOwners external{
+    function appeal_closure(address contractAddr, address reciver, uint256 balance, int8 serial_num , uint8 v, bytes32 r, bytes32 s) onlyOwners external{
 
         require(block.number - startAppealBlock < appealPeriod, "The appeal period is over.");
+
+        // Checks signiture:
         if(msg.sender == owner1){
-            require(verifySig(balance, serial_num, v, r, s, owner2) && serial_num > lastSerial, "Appeal is illegal.");
-            owner1Money = balance;
-            owner2Money = address(this).balance - owner1Money;
+            require(verifySig(contractAddr, reciver, balance, serial_num, v, r, s, owner2), "Appeal is illegal.");
         } else{
-            require(verifySig(balance, serial_num, v, r, s, owner1) && serial_num > lastSerial, "Appeal is illegal.");
+            require(verifySig(contractAddr, reciver, balance, serial_num, v, r, s, owner1), "Appeal is illegal.");
+        }
+
+        require(contractAddr == address(this) && serial_num > lastSerial && balance >=0, "Fishy message.");
+
+        // Gives money to the reciver:
+        if(reciver == owner1){
+            owner1Money = balance;
+            owner2Money = address(this).balance - balance;
+        }else{
             owner2Money = balance;
-            owner2Money = address(this).balance - owner2Money;
+            owner1Money = address(this).balance - balance;
         }
 
         lastSerial = serial_num;
-        lastBalance = balance;
     }
 
 
@@ -110,20 +122,4 @@ contract Channel{
     function () external payable{
         revert();  // we make this contract non-payable. Money can only be added at creation.
     }
-
-    // FOR TESTS:
-
-    function  getOwner1Money() view external returns(uint256){
-        return owner1Money;
-    }
-
-    function  getOwner2Money() view external returns(uint256){
-        return owner2Money;
-    }
-
-    function getFirstBlokInAppeal() view external returns(uint){
-        return startAppealBlock;
-    }
-
-
 }
