@@ -1,6 +1,6 @@
 pragma solidity ^0.5.9;
 
-// this is a skeleton file for the channel contract. Feel free to change as you wish.
+
 contract Channel{
 
     address payable public owner1;
@@ -14,7 +14,7 @@ contract Channel{
 
     event test(uint256 msg);
 
-	//Notice how this modifier is used below to restrict access. Create more if you need them!
+	// This modifier is used below to restrict access.
     modifier onlyOwners{
         require(msg.sender == owner1 || msg.sender == owner2,
             "Only an owner can call this function.");
@@ -42,15 +42,17 @@ contract Channel{
     }
 
 
-    function verifySig(address contractAddr, address reciver, uint256 balance, int8 serial_num, uint8 v, bytes32 r, bytes32 s, address signerPubKey) pure public returns (bool){
+    function verifySig(address contractAddr, address reciver, uint256 balance, int8 serial_num, uint8 v,
+    bytes32 r, bytes32 s, address signerPubKey) pure public returns (bool){
         bytes32 hashMessage = keccak256(abi.encodePacked(contractAddr, reciver, balance, serial_num));
         bytes32 messageDigest = keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", hashMessage));
-        return ecrecover(messageDigest, v, r, s) ==signerPubKey;
+        return ecrecover(messageDigest, v, r, s) == signerPubKey;
     }
 
 
     //closes the channel based on a message by one party. starts the appeal period
-    function one_sided_close(address contractAddr, address reciver, uint256 balance, int8 serial_num , uint8 v, bytes32 r, bytes32 s) onlyOwners external{
+    function one_sided_close(address contractAddr, address reciver, uint256 balance, int8 serial_num ,
+    uint8 v, bytes32 r, bytes32 s) onlyOwners external{
 
         // Tests the signiture:
         if(msg.sender == owner1){
@@ -77,7 +79,8 @@ contract Channel{
 
 
     // appeals a one_sided_close. should show a newer signature. only useful within the appeal period
-    function appeal_closure(address contractAddr, address reciver, uint256 balance, int8 serial_num , uint8 v, bytes32 r, bytes32 s) onlyOwners external{
+    function appeal_closure(address contractAddr, address reciver, uint256 balance, int8 serial_num ,
+    uint8 v, bytes32 r, bytes32 s) onlyOwners external{
 
         require(block.number - startAppealBlock < appealPeriod, "The appeal period is over.");
 
@@ -105,8 +108,10 @@ contract Channel{
 
     //withdraws the money of msg.sender to the address he requested. Only used after appeals are done.
     function withdraw_funds(address payable dest_address) onlyOwners external{
+
         require(lastSerial >= 0, "Channel is not closed yet.");
         require(block.number >= (startAppealBlock + appealPeriod), "Appeal period is not over yet!");
+
         uint256 amountToWithdraw;
         if(msg.sender == owner1){
             amountToWithdraw = owner1Money;
@@ -115,6 +120,7 @@ contract Channel{
             amountToWithdraw = owner2Money;
             owner2Money = 0;
         }
+
         (bool res,) = dest_address.call.value(amountToWithdraw)("");
         require(res);
     }
